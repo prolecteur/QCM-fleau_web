@@ -1,0 +1,888 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Escape Game Multijoueur</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .hidden {
+            display: none !important;
+        }
+        .fade-in {
+            animation: fadeIn 0.5s;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        .big-answer {
+            animation: bigPulse 1s infinite;
+        }
+        @keyframes bigPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 min-h-screen">
+    
+    <!-- Audio -->
+    <audio id="bgMusic" loop>
+        <source src="data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBTGH0fPTgjMGHm7A7+OZUQ8PVKni7q9cFwlAnN7xwHAfBSyAzPLaizsIHGS57OihUQ8RU6Dp6qNJCw2" type="audio/wav">
+    </audio>
+
+    <!-- Configuration Firebase -->
+    <div id="firebaseConfig" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-2xl w-full border border-white/20 shadow-2xl fade-in">
+            <h1 class="text-4xl font-bold text-white text-center mb-4">🔧 Configuration Firebase</h1>
+            <p class="text-white/80 text-center mb-6">Entrez vos identifiants Firebase pour activer le multijoueur</p>
+            
+            <div class="space-y-3 mb-6">
+                <input type="text" id="apiKey" placeholder="API Key" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="authDomain" placeholder="Auth Domain" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="databaseURL" placeholder="Database URL" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="projectId" placeholder="Project ID" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="storageBucket" placeholder="Storage Bucket" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="messagingSenderId" placeholder="Messaging Sender ID" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                <input type="text" id="appId" placeholder="App ID" class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+            </div>
+
+            <button onclick="initFirebase()" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-lg mb-4">
+                ✅ Connecter
+            </button>
+
+            <div class="bg-blue-500/20 border border-blue-400 rounded-lg p-4 text-white text-sm">
+                <p class="font-bold mb-2">📚 Comment obtenir ces informations :</p>
+                <ol class="list-decimal list-inside space-y-1">
+                    <li>Allez sur <a href="https://console.firebase.google.com" target="_blank" class="underline">console.firebase.google.com</a></li>
+                    <li>Créez un nouveau projet (gratuit)</li>
+                    <li>Allez dans "Realtime Database" → Créer une base de données</li>
+                    <li>Choisissez "Mode test" pour les règles</li>
+                    <li>Allez dans Paramètres ⚙️ → Paramètres du projet</li>
+                    <li>Copiez les valeurs de "Configuration SDK"</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran de connexion -->
+    <div id="loginScreen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 max-w-md w-full border border-white/20 shadow-2xl fade-in">
+            <h1 class="text-4xl font-bold text-white text-center mb-8">🔐 Escape Game</h1>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="text-white font-semibold block mb-2">Pseudo</label>
+                    <input type="text" id="pseudoInput" 
+                        class="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="Entrez votre pseudo">
+                </div>
+
+                <div>
+                    <label class="text-white font-semibold block mb-2">Avatar</label>
+                    <div id="avatarGrid" class="grid grid-cols-4 gap-2">
+                        <!-- Avatars générés par JS -->
+                    </div>
+                </div>
+
+                <div>
+                    <label class="text-white font-semibold block mb-2">Rôle</label>
+                    <select id="roleSelect" class="w-full px-4 py-3 rounded-lg bg-white/20 text-black font-bold border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                        <option value="player">Joueur</option>
+                        <option value="host">Hôte de partie</option>
+                    </select>
+                </div>
+
+                <div id="playerCodeDiv" class="hidden">
+                    <label class="text-white font-semibold block mb-2">Code de la Partie</label>
+                    <input type="text" id="playerRoomCodeInput" 
+                        class="w-full px-4 py-3 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400"
+                        placeholder="Entrez le code de la partie">
+                </div>
+
+                <button onclick="login()" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-lg">
+                    Rejoindre
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran Lobby -->
+    <div id="lobbyScreen" class="hidden min-h-screen p-4">
+        <!-- Header -->
+        <div class="max-w-6xl mx-auto mb-6">
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20 flex items-center justify-between flex-wrap gap-4">
+                <div class="flex items-center gap-3">
+                    <div class="text-4xl" id="userAvatar"></div>
+                    <div>
+                        <div class="text-white font-bold" id="userPseudo"></div>
+                        <div class="text-white/60 text-sm" id="userRole"></div>
+                    </div>
+                </div>
+                
+                <div class="flex items-center gap-3">
+                    <div class="bg-white/20 px-4 py-2 rounded-lg">
+                        <div class="text-white/60 text-xs">Code Salle</div>
+                        <div class="text-white font-mono font-bold" id="roomCode"></div>
+                    </div>
+                    <button onclick="toggleMusic()" class="p-3 bg-white/20 rounded-lg hover:bg-white/30 transition text-white">
+                        <span id="musicIcon">🔊</span>
+                    </button>
+                    <button onclick="logout()" class="p-3 bg-red-500/80 rounded-lg hover:bg-red-600 transition text-white">
+                        ↩️
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <div class="max-w-6xl mx-auto grid gap-6">
+            <!-- Joueurs -->
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20">
+                <h2 class="text-2xl font-bold text-white mb-4">👥 Joueurs (<span id="playerCount">0</span>)</h2>
+                <div id="playersList" class="space-y-2 max-h-96 overflow-y-auto">
+                    <!-- Joueurs générés par JS -->
+                </div>
+                
+                <!-- Bouton commencer (visible uniquement pour l'hôte) -->
+                <button onclick="startGameForAll()" id="startGameBtn" class="w-full mt-6 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-3 rounded-lg hover:from-green-600 hover:to-emerald-600 transition shadow-lg hidden">
+                    🎮 Commencer la Partie
+                </button>
+            </div>
+
+            <!-- Gestion des questions (visible uniquement pour host) -->
+            <div id="questionsPanel" class="bg-white/10 backdrop-blur-lg rounded-2xl p-6 border border-white/20 hidden">
+                <h2 class="text-2xl font-bold text-white mb-4">⚙️ Questions (<span id="questionCount">0</span>)</h2>
+                
+                <div class="space-y-3 mb-4">
+                    <!-- Import Excel/CSV -->
+                    <div class="bg-blue-500/20 border border-blue-400 rounded-lg p-4">
+                        <p class="text-white font-bold mb-2">📊 Importer un QCM (Excel/CSV)</p>
+                        <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" class="hidden">
+                        <button onclick="document.getElementById('excelFileInput').click()" class="w-full bg-blue-500 text-white font-bold py-2 rounded-lg hover:bg-blue-600 transition">
+                            📁 Choisir un fichier Excel/CSV
+                        </button>
+                        <p class="text-white/60 text-xs mt-2">Format: Question | Option1 | Option2 | Option3 | Option4 | NuméroRéponse(1-4)</p>
+                    </div>
+
+                    <input type="text" id="questionInput" placeholder="Question..."
+                        class="w-full px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none focus:ring-2 focus:ring-purple-400">
+                    
+                    <div class="space-y-2">
+                        <div class="flex gap-2">
+                            <input type="text" id="option0" placeholder="Option 1"
+                                class="flex-1 px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none">
+                            <button onclick="selectCorrect(0)" id="correct0" class="px-4 py-2 rounded-lg bg-green-500 text-white transition">✓</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="option1" placeholder="Option 2"
+                                class="flex-1 px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none">
+                            <button onclick="selectCorrect(1)" id="correct1" class="px-4 py-2 rounded-lg bg-white/20 text-white/60 hover:bg-white/30 transition">✓</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="option2" placeholder="Option 3"
+                                class="flex-1 px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none">
+                            <button onclick="selectCorrect(2)" id="correct2" class="px-4 py-2 rounded-lg bg-white/20 text-white/60 hover:bg-white/30 transition">✓</button>
+                        </div>
+                        <div class="flex gap-2">
+                            <input type="text" id="option3" placeholder="Option 4"
+                                class="flex-1 px-4 py-2 rounded-lg bg-white/20 text-white placeholder-white/60 border border-white/30 focus:outline-none">
+                            <button onclick="selectCorrect(3)" id="correct3" class="px-4 py-2 rounded-lg bg-white/20 text-white/60 hover:bg-white/30 transition">✓</button>
+                        </div>
+                    </div>
+                    
+                    <button onclick="addQuestion()" class="w-full bg-gradient-to-r from-green-500 to-emerald-500 text-white font-bold py-2 rounded-lg hover:from-green-600 hover:to-emerald-600 transition">
+                        ➕ Ajouter Question
+                    </button>
+                </div>
+
+                <div id="questionsList" class="space-y-2 max-h-64 overflow-y-auto mb-4">
+                    <!-- Questions générées par JS -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran de jeu -->
+    <div id="gameScreen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-3xl w-full">
+            <div class="mb-6 bg-white/10 backdrop-blur-lg rounded-2xl p-4 border border-white/20">
+                <div class="flex justify-between text-white mb-2">
+                    <span>Question <span id="currentQ">1</span> / <span id="totalQ">1</span></span>
+                    <span class="font-bold">Score: <span id="currentScore">0</span></span>
+                </div>
+                <div class="flex justify-between text-white mb-2">
+                    <span class="text-2xl font-bold">⏱️ <span id="timer">7</span>s</span>
+                </div>
+                <div class="w-full bg-white/20 rounded-full h-2">
+                    <div id="progressBar" class="bg-gradient-to-r from-purple-500 to-pink-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+                </div>
+            </div>
+
+            <div class="bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
+                <h2 id="questionText" class="text-3xl font-bold text-white mb-8 text-center"></h2>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="optionsGrid">
+                    <!-- Options générées par JS -->
+                </div>
+
+                <div id="correctAnswerDisplay" class="hidden mt-6 p-8 bg-green-500 border-4 border-green-300 rounded-2xl shadow-2xl big-answer">
+                    <p class="text-white text-center font-bold text-5xl mb-4">✅ BONNE RÉPONSE</p>
+                    <p class="text-white text-center font-bold text-4xl" id="correctAnswerText"></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Écran résultats -->
+    <div id="resultsScreen" class="hidden min-h-screen flex items-center justify-center p-4">
+        <div class="max-w-2xl w-full bg-white/10 backdrop-blur-lg rounded-2xl p-8 border border-white/20">
+            <h1 class="text-4xl font-bold text-white text-center mb-8">🏆 Résultats Finaux 🏆</h1>
+            <div id="resultsList" class="space-y-3 mb-8">
+                <!-- Résultats générés par JS -->
+            </div>
+            <button onclick="backToLobby()" class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white font-bold py-3 rounded-lg hover:from-purple-600 hover:to-pink-600 transition shadow-lg">
+                Retour au Lobby
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ============================================
+        // 🔥 CONFIGURATION FIREBASE - À MODIFIER UNE SEULE FOIS
+        // ============================================
+        const FIREBASE_CONFIG = {
+            apiKey: "AIzaSyCdj_R6kKTH70wM3vu3Uzl_6tAy_ZzTKMw",
+            authDomain: "qcm-fleau.firebaseapp.com",
+            databaseURL: "https://qcm-fleau-default-rtdb.firebaseio.com",
+            projectId: "qcm-fleau",
+            storageBucket: "qcm-fleau.firebasestorage.app",
+            messagingSenderId: "455524435079",
+            appId: "1:455524435079:web:42c29a777879342ee7a422"
+        };
+        // ============================================
+
+        // Variables globales
+        const AVATARS = ['🧙‍♂️', '🦸‍♀️', '🤖', '👨‍🚀', '🧛‍♂️', '🧚‍♀️', '🦹‍♂️', '👾'];
+        
+        let db = null;
+        let currentUser = null;
+        let roomCode = null;
+        let isHost = false;
+        let selectedAvatar = AVATARS[0];
+        let correctAnswerIndex = 0;
+        let musicOn = true;
+        let timerInterval = null;
+        let timeLeft = 7;
+        let currentQuestionIndex = 0;
+        let hasAnswered = false;
+        let roomRef = null;
+        let gameStarted = false;
+
+        // Initialisation
+        document.addEventListener('DOMContentLoaded', () => {
+            autoInitFirebase();
+            initAvatars();
+            
+            document.getElementById('roleSelect').addEventListener('change', (e) => {
+                document.getElementById('playerCodeDiv').classList.toggle('hidden', e.target.value !== 'player');
+            });
+
+            document.getElementById('excelFileInput').addEventListener('change', handleFileUpload);
+        });
+
+        function autoInitFirebase() {
+            if (FIREBASE_CONFIG.apiKey === "VOTRE_API_KEY" || !FIREBASE_CONFIG.databaseURL) {
+                console.warn('⚠️ Configuration Firebase manquante');
+                showScreen('firebaseConfig');
+                return;
+            }
+
+            try {
+                firebase.initializeApp(FIREBASE_CONFIG);
+                db = firebase.database();
+                console.log('✅ Firebase connecté automatiquement!');
+                showScreen('loginScreen');
+            } catch (error) {
+                console.error('❌ Erreur Firebase:', error);
+                alert('❌ Erreur de connexion Firebase. Vérifiez la configuration dans le code.');
+                showScreen('firebaseConfig');
+            }
+        }
+
+        function initAvatars() {
+            const grid = document.getElementById('avatarGrid');
+            grid.innerHTML = '';
+            AVATARS.forEach((avatar, idx) => {
+                const btn = document.createElement('button');
+                btn.className = 'text-4xl p-3 rounded-lg transition ' + (idx === 0 ? 'bg-purple-500 scale-110' : 'bg-white/20 hover:bg-white/30');
+                btn.textContent = avatar;
+                btn.onclick = () => selectAvatar(avatar, btn);
+                grid.appendChild(btn);
+            });
+        }
+
+        function selectAvatar(avatar, btn) {
+            selectedAvatar = avatar;
+            document.querySelectorAll('#avatarGrid button').forEach(b => {
+                b.className = 'text-4xl p-3 rounded-lg transition bg-white/20 hover:bg-white/30';
+            });
+            btn.className = 'text-4xl p-3 rounded-lg transition bg-purple-500 scale-110';
+        }
+
+        function initFirebase() {
+            const firebaseConfig = {
+                apiKey: document.getElementById('apiKey').value.trim(),
+                authDomain: document.getElementById('authDomain').value.trim(),
+                databaseURL: document.getElementById('databaseURL').value.trim(),
+                projectId: document.getElementById('projectId').value.trim(),
+                storageBucket: document.getElementById('storageBucket').value.trim(),
+                messagingSenderId: document.getElementById('messagingSenderId').value.trim(),
+                appId: document.getElementById('appId').value.trim()
+            };
+
+            if (!firebaseConfig.apiKey || !firebaseConfig.databaseURL) {
+                alert('⚠️ Veuillez remplir au minimum API Key et Database URL');
+                return;
+            }
+
+            try {
+                if (firebase.apps.length === 0) {
+                    firebase.initializeApp(firebaseConfig);
+                }
+                db = firebase.database();
+                console.log('✅ Firebase connecté manuellement!');
+                showScreen('loginScreen');
+            } catch (error) {
+                alert('❌ Erreur de connexion Firebase: ' + error.message);
+                console.error(error);
+            }
+        }
+
+        function handleFileUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const firstSheet = workbook.Sheets[workbook.SheetNames[0]];
+                    const jsonData = XLSX.utils.sheet_to_json(firstSheet, { header: 1 });
+
+                    let importedCount = 0;
+                    
+                    for (let i = 0; i < jsonData.length; i++) {
+                        const row = jsonData[i];
+                        
+                        if (row.length >= 6) {
+                            const question = row[0];
+                            const option1 = row[1];
+                            const option2 = row[2];
+                            const option3 = row[3];
+                            const option4 = row[4];
+                            const correctAnswer = parseInt(row[5]);
+
+                            if (question && option1 && option2 && option3 && option4 && 
+                                correctAnswer >= 1 && correctAnswer <= 4) {
+                                
+                                const questionId = Date.now().toString() + '_' + i;
+                                const questionData = {
+                                    id: questionId,
+                                    question: question.toString(),
+                                    options: [
+                                        option1.toString(),
+                                        option2.toString(),
+                                        option3.toString(),
+                                        option4.toString()
+                                    ],
+                                    correct: correctAnswer - 1
+                                };
+
+                                roomRef.child('questions').child(questionId).set(questionData);
+                                importedCount++;
+                            }
+                        }
+                    }
+
+                    if (importedCount > 0) {
+                        alert(`✅ ${importedCount} question(s) importée(s) avec succès !`);
+                    } else {
+                        alert('❌ Aucune question valide trouvée. Vérifiez le format du fichier.');
+                    }
+
+                    event.target.value = '';
+
+                } catch (error) {
+                    alert('❌ Erreur lors de la lecture du fichier : ' + error.message);
+                    console.error(error);
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function login() {
+            if (!db) {
+                alert('⚠️ Firebase non configuré!');
+                return;
+            }
+
+            const pseudo = document.getElementById('pseudoInput').value.trim();
+            const role = document.getElementById('roleSelect').value;
+
+            if (!pseudo) {
+                alert('Veuillez entrer un pseudo !');
+                return;
+            }
+
+            isHost = (role === 'host');
+
+            if (isHost) {
+                roomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+                createRoom(pseudo);
+            } else {
+                const code = document.getElementById('playerRoomCodeInput').value.trim().toUpperCase();
+                if (!code) {
+                    alert('Veuillez entrer le code de la partie !');
+                    return;
+                }
+                joinRoom(code, pseudo);
+            }
+        }
+
+        function createRoom(pseudo) {
+            roomRef = db.ref('rooms/' + roomCode);
+            
+            currentUser = {
+                id: Date.now().toString(),
+                pseudo: pseudo,
+                avatar: selectedAvatar,
+                role: 'host',
+                score: 0
+            };
+
+            const roomData = {
+                code: roomCode,
+                host: currentUser.id,
+                players: {},
+                questions: {},
+                gameStarted: false,
+                currentQuestion: -1,
+                createdAt: firebase.database.ServerValue.TIMESTAMP
+            };
+
+            roomData.players[currentUser.id] = currentUser;
+
+            roomRef.set(roomData).then(() => {
+                console.log('✅ Partie créée:', roomCode);
+                document.getElementById('roomCode').textContent = roomCode;
+                document.getElementById('questionsPanel').classList.remove('hidden');
+                showScreen('lobbyScreen');
+                listenToRoom();
+            }).catch(error => {
+                alert('❌ Erreur création partie: ' + error.message);
+            });
+        }
+
+        function joinRoom(code, pseudo) {
+            roomCode = code;
+            roomRef = db.ref('rooms/' + roomCode);
+
+            roomRef.once('value').then(snapshot => {
+                if (!snapshot.exists()) {
+                    alert('❌ Code de partie invalide ! La partie n\'existe pas.');
+                    return;
+                }
+
+                currentUser = {
+                    id: Date.now().toString(),
+                    pseudo: pseudo,
+                    avatar: selectedAvatar,
+                    role: 'player',
+                    score: 0
+                };
+
+                roomRef.child('players').child(currentUser.id).set(currentUser).then(() => {
+                    console.log('✅ Rejoint la partie:', roomCode);
+                    document.getElementById('roomCode').textContent = roomCode;
+                    showScreen('lobbyScreen');
+                    listenToRoom();
+                });
+            }).catch(error => {
+                alert('❌ Erreur: ' + error.message);
+            });
+        }
+
+        function listenToRoom() {
+            roomRef.child('players').on('value', snapshot => {
+                updatePlayersList(snapshot.val() || {});
+            });
+
+            roomRef.child('questions').on('value', snapshot => {
+                updateQuestionsList(snapshot.val() || {});
+            });
+
+            roomRef.child('gameStarted').on('value', snapshot => {
+                if (snapshot.val() === true && !gameStarted) {
+                    gameStarted = true;
+                    showScreen('gameScreen');
+                    startGameplay();
+                }
+            });
+
+            roomRef.child('currentQuestion').on('value', snapshot => {
+                const qIndex = snapshot.val();
+                if (qIndex !== null && qIndex >= 0 && gameStarted) {
+                    currentQuestionIndex = qIndex;
+                    displayQuestion();
+                }
+            });
+        }
+
+        function updatePlayersList(players) {
+            const list = document.getElementById('playersList');
+            const count = Object.keys(players).length;
+            document.getElementById('playerCount').textContent = count;
+            
+            if (!currentUser) return;
+            
+            document.getElementById('userAvatar').textContent = currentUser.avatar;
+            document.getElementById('userPseudo').textContent = currentUser.pseudo + (currentUser.role === 'host' ? ' 🛡️' : '');
+            document.getElementById('userRole').textContent = currentUser.role;
+
+            list.innerHTML = '';
+            Object.values(players).forEach(player => {
+                const div = document.createElement('div');
+                div.className = 'bg-white/10 rounded-lg p-3 flex items-center justify-between';
+                div.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="text-3xl">${player.avatar}</div>
+                        <div>
+                            <div class="text-white font-semibold">
+                                ${player.pseudo}
+                                ${player.role === 'host' ? '🛡️' : ''}
+                            </div>
+                            <div class="text-white/60 text-sm">${player.role}</div>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(div);
+            });
+
+            roomRef.child('questions').once('value', snapshot => {
+                const questions = snapshot.val() || {};
+                if (isHost && Object.keys(questions).length > 0) {
+                    document.getElementById('startGameBtn').classList.remove('hidden');
+                }
+            });
+        }
+
+        function selectCorrect(idx) {
+            correctAnswerIndex = idx;
+            for (let i = 0; i < 4; i++) {
+                const btn = document.getElementById(`correct${i}`);
+                btn.className = i === idx ? 
+                    'px-4 py-2 rounded-lg bg-green-500 text-white transition' : 
+                    'px-4 py-2 rounded-lg bg-white/20 text-white/60 hover:bg-white/30 transition';
+            }
+        }
+
+        function addQuestion() {
+            if (!isHost) return;
+
+            const question = document.getElementById('questionInput').value.trim();
+            const options = [
+                document.getElementById('option0').value.trim(),
+                document.getElementById('option1').value.trim(),
+                document.getElementById('option2').value.trim(),
+                document.getElementById('option3').value.trim()
+            ];
+
+            if (!question || options.some(opt => !opt)) {
+                alert('Veuillez remplir tous les champs !');
+                return;
+            }
+
+            const questionId = Date.now().toString();
+            const questionData = {
+                id: questionId,
+                question: question,
+                options: options,
+                correct: correctAnswerIndex
+            };
+
+            roomRef.child('questions').child(questionId).set(questionData).then(() => {
+                document.getElementById('questionInput').value = '';
+                for (let i = 0; i < 4; i++) {
+                    document.getElementById(`option${i}`).value = '';
+                }
+                selectCorrect(0);
+            });
+        }
+
+        function updateQuestionsList(questions) {
+            const count = Object.keys(questions).length;
+            document.getElementById('questionCount').textContent = count;
+            
+            const list = document.getElementById('questionsList');
+            list.innerHTML = '';
+            
+            Object.values(questions).forEach((q, idx) => {
+                const div = document.createElement('div');
+                div.className = 'bg-white/10 rounded-lg p-3';
+                div.innerHTML = `
+                    <div class="text-white font-semibold">${idx + 1}. ${q.question}</div>
+                    <div class="text-white/60 text-sm mt-1">Réponse: ${q.options[q.correct]}</div>
+                `;
+                list.appendChild(div);
+            });
+
+            if (isHost && count > 0) {
+                document.getElementById('startGameBtn').classList.remove('hidden');
+            }
+        }
+
+        function startGameForAll() {
+            if (!isHost) return;
+            
+            roomRef.update({
+                gameStarted: true,
+                currentQuestion: 0
+            });
+        }
+
+        function startGameplay() {
+            currentQuestionIndex = 0;
+            hasAnswered = false;
+            timeLeft = 7;
+        }
+
+        function displayQuestion() {
+            hasAnswered = false;
+            timeLeft = 7;
+            document.getElementById('correctAnswerDisplay').classList.add('hidden');
+            document.getElementById('optionsGrid').style.display = 'grid';
+            document.getElementById('questionText').style.display = 'block';
+            
+            roomRef.child('questions').once('value', snapshot => {
+                const questions = Object.values(snapshot.val() || {});
+                
+                if (currentQuestionIndex >= questions.length) {
+                    showResults();
+                    return;
+                }
+                
+                const q = questions[currentQuestionIndex];
+                document.getElementById('currentQ').textContent = currentQuestionIndex + 1;
+                document.getElementById('totalQ').textContent = questions.length;
+                
+                roomRef.child('players').child(currentUser.id).once('value', pSnapshot => {
+                    const playerData = pSnapshot.val();
+                    document.getElementById('currentScore').textContent = playerData.score || 0;
+                });
+                
+                document.getElementById('progressBar').style.width = ((currentQuestionIndex + 1) / questions.length * 100) + '%';
+                document.getElementById('questionText').textContent = q.question;
+                document.getElementById('timer').textContent = timeLeft;
+
+                const grid = document.getElementById('optionsGrid');
+                grid.innerHTML = '';
+                
+                q.options.forEach((option, idx) => {
+                    const btn = document.createElement('button');
+                    btn.className = 'bg-white/20 hover:bg-white/30 text-white font-semibold py-4 px-6 rounded-xl transition transform hover:scale-105';
+                    btn.textContent = option;
+                    btn.onclick = () => answerQuestion(idx, btn, q);
+                    grid.appendChild(btn);
+                });
+
+                startTimer(q);
+            });
+        }
+
+        function startTimer(question) {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            timerInterval = setInterval(() => {
+                timeLeft--;
+                document.getElementById('timer').textContent = timeLeft;
+
+                if (timeLeft === 0) {
+                    if (!hasAnswered) {
+                        hasAnswered = true;
+                        disableAllButtons();
+                    }
+                    showCorrectAnswerBig(question);
+                }
+
+                if (timeLeft === -3) {
+                    clearInterval(timerInterval);
+                    
+                    if (isHost) {
+                        roomRef.child('questions').once('value', snapshot => {
+                            const questions = Object.values(snapshot.val() || {});
+                            if (currentQuestionIndex < questions.length - 1) {
+                                roomRef.update({ currentQuestion: currentQuestionIndex + 1 });
+                            } else {
+                                roomRef.update({ 
+                                    gameStarted: false,
+                                    currentQuestion: -1
+                                });
+                                showResults();
+                            }
+                        });
+                    }
+                }
+            }, 1000);
+        }
+
+        function disableAllButtons() {
+            const buttons = document.querySelectorAll('#optionsGrid button');
+            buttons.forEach(b => {
+                b.disabled = true;
+                b.classList.remove('hover:bg-white/30', 'hover:scale-105');
+            });
+        }
+
+        function showCorrectAnswerBig(question) {
+            document.getElementById('optionsGrid').style.display = 'none';
+            document.getElementById('questionText').style.display = 'none';
+            
+            document.getElementById('correctAnswerText').textContent = question.options[question.correct];
+            document.getElementById('correctAnswerDisplay').classList.remove('hidden');
+        }
+
+        function answerQuestion(idx, btn, question) {
+            if (hasAnswered || timeLeft <= 0) return;
+            hasAnswered = true;
+
+            const isCorrect = idx === question.correct;
+
+            disableAllButtons();
+
+            if (isCorrect) {
+                btn.className = 'bg-green-500 text-white font-semibold py-4 px-6 rounded-xl';
+                
+                roomRef.child('players').child(currentUser.id).once('value', snapshot => {
+                    const player = snapshot.val();
+                    const newScore = (player.score || 0) + 1;
+                    roomRef.child('players').child(currentUser.id).update({ score: newScore });
+                    document.getElementById('currentScore').textContent = newScore;
+                });
+            } else {
+                btn.className = 'bg-red-500 text-white font-semibold py-4 px-6 rounded-xl';
+            }
+        }
+
+        function showResults() {
+            if (timerInterval) clearInterval(timerInterval);
+            gameStarted = false;
+            showScreen('resultsScreen');
+            
+            roomRef.child('players').once('value', snapshot => {
+                const players = Object.values(snapshot.val() || {});
+                const sortedPlayers = players.sort((a, b) => (b.score || 0) - (a.score || 0));
+                
+                const list = document.getElementById('resultsList');
+                list.innerHTML = '';
+                
+                sortedPlayers.forEach((player, idx) => {
+                    const div = document.createElement('div');
+                    div.className = `bg-white/10 rounded-lg p-4 flex items-center justify-between ${idx === 0 ? 'ring-4 ring-yellow-400' : ''}`;
+                    div.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <div class="text-2xl font-bold text-white/60">#${idx + 1}</div>
+                            <div class="text-4xl">${player.avatar}</div>
+                            <div>
+                                <div class="text-white font-bold">${player.pseudo}</div>
+                                <div class="text-white/60 text-sm">${player.score || 0} points</div>
+                            </div>
+                        </div>
+                        ${idx === 0 ? '<span class="text-4xl">👑</span>' : ''}
+                    `;
+                    list.appendChild(div);
+                });
+            });
+        }
+
+        function backToLobby() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            if (isHost) {
+                roomRef.update({
+                    gameStarted: false,
+                    currentQuestion: -1
+                });
+                
+                roomRef.child('players').once('value', snapshot => {
+                    const players = snapshot.val() || {};
+                    Object.keys(players).forEach(playerId => {
+                        roomRef.child('players').child(playerId).update({ score: 0 });
+                    });
+                });
+            }
+            
+            currentQuestionIndex = 0;
+            timeLeft = 7;
+            gameStarted = false;
+            showScreen('lobbyScreen');
+        }
+
+        function toggleMusic() {
+            musicOn = !musicOn;
+            const audio = document.getElementById('bgMusic');
+            const icon = document.getElementById('musicIcon');
+            
+            if (musicOn) {
+                audio.play();
+                icon.textContent = '🔊';
+            } else {
+                audio.pause();
+                icon.textContent = '🔇';
+            }
+        }
+
+        function logout() {
+            if (timerInterval) clearInterval(timerInterval);
+            
+            if (currentUser && roomRef) {
+                roomRef.child('players').child(currentUser.id).remove();
+                
+                if (isHost) {
+                    roomRef.remove();
+                }
+            }
+            
+            currentUser = null;
+            roomCode = null;
+            isHost = false;
+            gameStarted = false;
+            showScreen('loginScreen');
+        }
+
+        function showScreen(screenId) {
+            ['firebaseConfig', 'loginScreen', 'lobbyScreen', 'gameScreen', 'resultsScreen'].forEach(id => {
+                document.getElementById(id).classList.add('hidden');
+            });
+            document.getElementById(screenId).classList.remove('hidden');
+        }
+    </script>
+</body>
+</html>
