@@ -495,6 +495,8 @@
                 questions: {},
                 gameStarted: false,
                 currentQuestion: -1,
+                timerStarted: false,
+                timeRemaining: 7,
                 createdAt: firebase.database.ServerValue.TIMESTAMP
             };
 
@@ -686,8 +688,54 @@
             
             roomRef.update({
                 gameStarted: true,
-                currentQuestion: 0
+                currentQuestion: 0,
+                timeRemaining: 7
+            }).then(() => {
+                // L'hôte lance le timer
+                startHostTimer();
             });
+        }
+
+        function startHostTimer() {
+            if (!isHost) return;
+            
+            if (timerInterval) clearInterval(timerInterval);
+            
+            let currentTime = 7;
+            roomRef.update({ timeRemaining: currentTime });
+            
+            timerInterval = setInterval(() => {
+                currentTime--;
+                roomRef.update({ timeRemaining: currentTime });
+                
+                if (currentTime <= 0) {
+                    clearInterval(timerInterval);
+                    
+                    // Attendre 3 secondes puis passer à la question suivante
+                    setTimeout(() => {
+                        roomRef.child('answers').child('q' + currentQuestionIndex).remove();
+                        
+                        roomRef.child('questions').once('value', snapshot => {
+                            const questions = Object.values(snapshot.val() || {});
+                            
+                            if (currentQuestionIndex < questions.length - 1) {
+                                roomRef.update({ 
+                                    currentQuestion: currentQuestionIndex + 1,
+                                    timeRemaining: 7
+                                }).then(() => {
+                                    startHostTimer();
+                                });
+                            } else {
+                                roomRef.update({ 
+                                    gameStarted: false,
+                                    currentQuestion: -1,
+                                    timeRemaining: 0
+                                });
+                            }
+                        });
+                    }, 3000);
+                }
+            }, 1000);
         }
 
         function startGameplay() {
@@ -698,7 +746,6 @@
         }
 
         function displayQuestion() {
-            if (timerInterval) clearInterval(timerInterval);
             if (questionTimer) clearTimeout(questionTimer);
             
             hasAnswered = false;
@@ -716,12 +763,6 @@
                 const questions = Object.values(snapshot.val() || {});
                 
                 if (currentQuestionIndex >= questions.length) {
-                    if (isHost) {
-                        roomRef.update({ 
-                            gameStarted: false,
-                            currentQuestion: -1
-                        });
-                    }
                     showResults();
                     return;
                 }
@@ -749,45 +790,7 @@
                     btn.onclick = () => answerQuestion(idx, btn, q);
                     grid.appendChild(btn);
                 });
-
-                startTimer(q, questions.length);
             });
-        }
-
-        function startTimer(question, totalQuestions) {
-            if (timerInterval) clearInterval(timerInterval);
-            
-            timerInterval = setInterval(() => {
-                timeLeft--;
-                document.getElementById('timer').textContent = timeLeft;
-
-                if (timeLeft === 0) {
-                    if (!hasAnswered) {
-                        hasAnswered = true;
-                        disableAllButtons();
-                    }
-                    clearInterval(timerInterval);
-                    showCorrectAnswerBig(question);
-                    
-                    // Après 3 secondes, passer à la question suivante
-                    questionTimer = setTimeout(() => {
-                        if (isHost) {
-                            // Effacer les réponses de cette question
-                            roomRef.child('answers').child('q' + currentQuestionIndex).remove();
-                            
-                            if (currentQuestionIndex < totalQuestions - 1) {
-                                roomRef.update({ currentQuestion: currentQuestionIndex + 1 });
-                            } else {
-                                roomRef.update({ 
-                                    gameStarted: false,
-                                    currentQuestion: -1
-                                });
-                                showResults();
-                            }
-                        }
-                    }, 3000);
-                }
-            }, 1000);
         }
 
         function displayPlayerAnswers(answersData) {
@@ -874,6 +877,7 @@
 
         function showResults() {
             if (timerInterval) clearInterval(timerInterval);
+            if (questionTimer) clearTimeout(questionTimer);
             gameStarted = false;
             showScreen('resultsScreen');
             
@@ -886,17 +890,31 @@
                 
                 sortedPlayers.forEach((player, idx) => {
                     const div = document.createElement('div');
-                    div.className = `bg-white/10 rounded-lg p-4 flex items-center justify-between ${idx === 0 ? 'ring-4 ring-yellow-400' : ''}`;
+                    let bgClass = 'bg-white/10';
+                    let medal = '';
+                    
+                    if (idx === 0) {
+                        bgClass = 'bg-yellow-500/30 ring-4 ring-yellow-400';
+                        medal = '🥇';
+                    } else if (idx === 1) {
+                        bgClass = 'bg-gray-300/30 ring-4 ring-gray-400';
+                        medal = '🥈';
+                    } else if (idx === 2) {
+                        bgClass = 'bg-orange-600/30 ring-4 ring-orange-500';
+                        medal = '🥉';
+                    }
+                    
+                    div.className = `${bgClass} rounded-lg p-5 flex items-center justify-between transform transition hover:scale-105`;
                     div.innerHTML = `
                         <div class="flex items-center gap-4">
-                            <div class="text-2xl font-bold text-white/60">#${idx + 1}</div>
-                            <div class="text-4xl">${player.avatar}</div>
+                            <div class="text-3xl font-bold ${idx < 3 ? 'text-white' : 'text-white/60'}">${idx + 1}.</div>
+                            <div class="text-5xl">${player.avatar}</div>
                             <div>
-                                <div class="text-white font-bold">${player.pseudo}</div>
-                                <div class="text-white/60 text-sm">${player.score || 0} points</div>
+                                <div class="text-white font-bold text-xl">${player.pseudo}</div>
+                                <div class="text-white/80 text-lg">${player.score || 0} point${(player.score || 0) > 1 ? 's' : ''}</div>
                             </div>
                         </div>
-                        ${idx === 0 ? '<span class="text-4xl">👑</span>' : ''}
+                        ${medal ? `<span class="text-6xl">${medal}</span>` : ''}
                     `;
                     list.appendChild(div);
                 });
@@ -910,7 +928,8 @@
             if (isHost) {
                 roomRef.update({
                     gameStarted: false,
-                    currentQuestion: -1
+                    currentQuestion: -1,
+                    timeRemaining: 7
                 });
                 
                 roomRef.child('answers').remove();
