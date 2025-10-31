@@ -417,6 +417,10 @@
                     gameStarted = true;
                     hasAnswered = false;
                     showScreen('gameScreen');
+                } else if (snapshot.val() === false && gameStarted) {
+                    // Le jeu vient de se terminer, afficher les résultats pour tous
+                    gameStarted = false;
+                    setTimeout(() => showResults(), 500);
                 }
             });
 
